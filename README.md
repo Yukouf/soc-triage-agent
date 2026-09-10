@@ -1,4 +1,9 @@
-# 🤖 Agent IA SOC — Automatisation Wazuh × Telegram × IA
+# 🤖 AI SOC Agent: Wazuh × Telegram × AI Automation
+
+<p align="center">
+  <a href="README.md">English</a> &bull;
+  <a href="README_fr.md">Français</a>
+</p>
 
 ```
  █████╗  ██████╗ ███████╗███╗   ██╗████████╗    ██╗ █████╗     ███████╗ ██████╗  ██████╗
@@ -9,26 +14,26 @@
 ╚═╝  ╚═╝ ╚═════╝ ╚════════╝╚═╝  ╚═══╝   ╚═╝       ╚═╝╚═╝  ╚═╝    ╚══════╝ ╚═════╝  ╚═════╝
 ```
 
-> **Un agent SOC défensif. Il reçoit les alertes Wazuh, les analyse (LLM ou heuristique), journalise ou exécute l’action autorisée par la configuration, puis sollicite une décision humaine sur Telegram ou dans le dashboard. La remédiation automatique est désactivée par défaut.**
+> **A defensive SOC agent. It receives Wazuh alerts, analyses them (LLM or heuristic), logs or executes the action permitted by the configuration, then requests a human decision on Telegram or in the dashboard. Automatic remediation is disabled by default.**
 
-## ⚠️ Ce qui est implémenté vs ce qui est un prototype
+## ⚠️ What is implemented vs what is a prototype
 
-Pour rester honnête sur le niveau de maturité du dépôt, les fonctionnalités sont classées en deux catégories :
+To stay honest about the maturity level of the repository, the features are classified into two categories:
 
-**✅ Effectives (code fonctionnel et testé)**
-- Webhook `/webhook/wazuh` + dashboard web (stats, journal, historique et décisions).
-- Analyse d'alerte via **DeepSeek API**, avec repli automatique sur un moteur **heuristique** hors-ligne.
-- Décision humaine sur **Telegram** (APPROUVER / REJETER / INCERTAIN) + endpoints équivalents sur le dashboard, notamment pour les propositions de règles Wazuh.
-- Blocage IP via **iptables** (`block_ip`, `block_ip_temporary` avec déblocage planifié à 1 h).
-- Notification **Slack** si un webhook est fourni.
-- Détection des **faux positifs** et génération de règles de silence Wazuh.
-- Journal des actions dans `alerts_log.json`, approbations en attente dans `pending_approvals.json`.
+**✅ Effective (working and tested code)**
+- `/webhook/wazuh` webhook + web dashboard (stats, log, history and decisions).
+- Alert analysis via the **DeepSeek API**, with automatic fallback to an offline **heuristic** engine.
+- Human decision on **Telegram** (APPROVE / REJECT / UNSURE) + equivalent endpoints on the dashboard, notably for Wazuh rule proposals.
+- IP blocking via **iptables** (`block_ip`, `block_ip_temporary` with scheduled unblocking after 1 h).
+- **Slack** notification if a webhook is provided.
+- **False positive** detection and generation of Wazuh silence rules.
+- Action log in `alerts_log.json`, pending approvals in `pending_approvals.json`.
 
-**🔬 Prototypes / à connecter (structure prévue, pas encore câblée)**
-- **Désactivation d'un compte Active Directory** : la commande `net user … /active:no` est définie dans `config.py` mais n'est **pas exécutée** par le moteur de remédiation.
-- **Création d'un vrai ticket GLPI** : le code loggue « Ticket à créer » mais **n'appelle pas l'API GLPI** ; il faut brancher `GLPI_URL` / `GLPI_API_TOKEN`.
+**🔬 Prototypes / to be connected (planned structure, not yet wired up)**
+- **Disabling an Active Directory account**: the command `net user … /active:no` is defined in `config.py` but is **not executed** by the remediation engine.
+- **Creation of a real GLPI ticket**: the code logs "Ticket to create" but **does not call the GLPI API**; `GLPI_URL` / `GLPI_API_TOKEN` still have to be wired up.
 
-> La remédiation automatique est **désactivée par défaut** (variable `SOC_ENABLE_AUTO_REMEDIATION`). Sans cette variable à `true`, le moteur enregistre l'action mais ne l'exécute pas.
+> Automatic remediation is **disabled by default** (`SOC_ENABLE_AUTO_REMEDIATION` variable). Without this variable set to `true`, the engine records the action but does not execute it.
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-3.x-black?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
@@ -39,49 +44,49 @@ Pour rester honnête sur le niveau de maturité du dépôt, les fonctionnalités
 
 ---
 
-## 🎯 Le problème
+## 🎯 The problem
 
-Les analystes SOC N1 doivent régulièrement :
-- Trier des **faux positifs** et des événements légitimes
-- **Copier-coller** des IP dans des outils de blocage
-- Documenter puis faire valider les décisions sensibles
+N1 SOC analysts regularly have to:
+- Sort through **false positives** and legitimate events
+- **Copy and paste** IPs into blocking tools
+- Document and then get sensitive decisions validated
 
-Ces tâches répétitives ralentissent le traitement et détournent l’attention des incidents prioritaires.
+These repetitive tasks slow down processing and divert attention from priority incidents.
 
-## 💡 La solution
+## 💡 The solution
 
-**Agent IA SOC** aide à fermer la boucle — de la détection à la décision — en réduisant le temps passé à trier le bruit. Le webhook normalise l’alerte, le moteur l’analyse, puis journalise ou exécute l’action selon la configuration. Telegram et le dashboard fournissent ensuite une validation humaine pour les propositions de règles et les décisions sensibles.
+**AI SOC Agent** helps close the loop, from detection to decision, by reducing the time spent sorting through noise. The webhook normalises the alert, the engine analyses it, then logs or executes the action according to the configuration. Telegram and the dashboard then provide human validation for rule proposals and sensitive decisions.
 
 ---
 
 ## 🏗️ Architecture
 
-![Architecture réelle de l’Agent IA SOC](assets/architecture.svg)
+![Actual architecture of the AI SOC Agent](assets/architecture.svg)
 
-Le moteur tente DeepSeek lorsqu’une clé est disponible, puis bascule sur des règles locales. La remédiation automatique reste **désactivée par défaut** : sans `SOC_ENABLE_AUTO_REMEDIATION=true`, aucun blocage IP proposé par l’analyse n’est exécuté. Les intégrations AD et GLPI restent hors du flux effectif.
+The engine tries DeepSeek when a key is available, then falls back to local rules. Automatic remediation remains **disabled by default**: without `SOC_ENABLE_AUTO_REMEDIATION=true`, no IP block proposed by the analysis is executed. The AD and GLPI integrations remain outside the effective flow.
 
 ---
 
 ## ⚡ Quick Start
 
 ```bash
-# 1. Cloner
+# 1. Clone
 git clone https://github.com/Yukouf/agent-ia-soc.git && cd agent-ia-soc
 
-# 2. Dépendances
+# 2. Dependencies
 pip install flask requests
 
-# 3. Configurer Telegram
+# 3. Configure Telegram
 export TELEGRAM_BOT_TOKEN="votre_token"
 export TELEGRAM_CHAT_IDS='["ID_CHAT_1","ID_CHAT_2"]'
 
-# 4. Lancer
+# 4. Run
 python3 webhook_receiver.py
 ```
 
 ```
 ╔══════════════════════════════════════════╗
-║   🤖 Agent IA SOC — Automatique          ║
+║   🤖 AI SOC Agent (Automatic)            ║
 ║                                          ║
 ║   Dashboard: http://0.0.0.0:5000         ║
 ║   Webhook:   POST /webhook/wazuh         ║
@@ -91,11 +96,11 @@ python3 webhook_receiver.py
 
 ---
 
-## 🧠 Comment ça marche
+## 🧠 How it works
 
-### 1. Alerte Wazuh → Webhook
+### 1. Wazuh alert → Webhook
 
-Wazuh envoie ses alertes au webhook `/webhook/wazuh` :
+Wazuh sends its alerts to the `/webhook/wazuh` webhook:
 
 ```json
 {
@@ -111,54 +116,54 @@ Wazuh envoie ses alertes au webhook `/webhook/wazuh` :
 }
 ```
 
-### 2. Analyse par IA
+### 2. Analysis by AI
 
-L'`ai_engine.py` analyse l'alerte et retourne :
+`ai_engine.py` analyses the alert and returns:
 
 ```json
 {
   "severity": "high",
   "confidence": 92,
-  "explanation": "15 tentatives SSH en 30 secondes depuis une IP externe inconnue. Aucune raison légitime.",
+  "explanation": "15 SSH attempts in 30 seconds from an unknown external IP. No legitimate reason.",
   "suggested_action": "block_ip",
   "is_false_positive": false
 }
 ```
 
-### 3. Validation humaine sur Telegram
+### 3. Human validation on Telegram
 
-> ⚠️ **ALERTE #100002 — BRUTEFORCE SSH**
+> ⚠️ **ALERT #100002: BRUTEFORCE SSH**
 > IP: `192.168.1.100` | Agent: `srv-web-01`
-> **Action suggérée :** `block_ip`
+> **Suggested action:** `block_ip`
 >
-> [✅ APPROUVE] [❌ REJETTE] [❓ INCERTAIN]
+> [✅ APPROVE] [❌ REJECT] [❓ UNSURE]
 
-### 4. Remédiation
+### 4. Remediation
 
-Si approuvé **et** si la remédiation automatique est activée (`SOC_ENABLE_AUTO_REMEDIATION=true`), le `remediation_engine.py` exécute :
+If approved **and** if automatic remediation is enabled (`SOC_ENABLE_AUTO_REMEDIATION=true`), `remediation_engine.py` executes:
 
-| Action | État | Comportement |
+| Action | State | Behaviour |
 |---|---|---|
-| `block_ip` | ✅ effectif | `iptables -A INPUT -s IP -j DROP` |
-| `block_ip_temporary` | ✅ effectif | Blocage 1 h puis suppression auto |
-| `silence_alert` | ✅ effectif | Enregistre le faux positif + règle de silence Wazuh |
-| `notify_slack` | ✅ effectif | Alerte Slack (si webhook fourni) |
-| `verify_and_escalate` | ✅ effectif | Escalade vers l'humain (log + Slack) |
-| `create_ticket` | ⚠️ partiel | Loggue « Ticket à créer » — l'appel API GLPI reste à brancher |
-| `disable_user_ad` | 🔬 prototype | Défini dans `config.py`, **non exécuté** par le moteur |
+| `block_ip` | ✅ effective | `iptables -A INPUT -s IP -j DROP` |
+| `block_ip_temporary` | ✅ effective | 1 h block then automatic removal |
+| `silence_alert` | ✅ effective | Records the false positive + Wazuh silence rule |
+| `notify_slack` | ✅ effective | Slack alert (if webhook provided) |
+| `verify_and_escalate` | ✅ effective | Escalation to the human (log + Slack) |
+| `create_ticket` | ⚠️ partial | Logs "Ticket to create". The GLPI API call still has to be wired up |
+| `disable_user_ad` | 🔬 prototype | Defined in `config.py`, **not executed** by the engine |
 
-> **Important :** si la remédiation automatique est désactivée (réglage par défaut), ces actions sont **enregistrées dans le journal** mais **jamais exécutées** — la validation humaine reste obligatoire.
+> **Important:** if automatic remediation is disabled (the default setting), these actions are **recorded in the log** but **never executed**: human validation remains mandatory.
 
 ---
 
-## 📊 Dashboard web
+## 📊 Web dashboard
 
-Interface minimale rendue côté serveur, avec un JavaScript client limité à l’auto-rafraîchissement et aux actions d’approbation :
+Minimal server-rendered interface, with client-side JavaScript limited to auto-refresh and approval actions:
 
-- 🔴 **Alertes actives** avec sévérité et confiance
-- 📋 **Historique** des remédiations
-- 📈 **Statistiques** (faux positifs, actions exécutées)
-- 🔍 **Détail** par alerte
+- 🔴 **Active alerts** with severity and confidence
+- 📋 **History** of remediations
+- 📈 **Statistics** (false positives, executed actions)
+- 🔍 **Detail** per alert
 
 ---
 
@@ -181,18 +186,18 @@ test_fp_tracker_integrity ...................... ok
 test_pending_approvals_integrity ............... ok
 test_security_headers .......................... ok
 
-Ran 11 tests in 0.024s — OK
+Ran 11 tests in 0.024s: OK
 ```
 
 ---
 
-## 🔒 Sécurité
+## 🔒 Security
 
-- ✅ Échappement HTML de toutes les données non fiables (XSS)
-- ✅ JavaScript client limité au rafraîchissement et aux décisions du dashboard
-- ✅ Validation des payloads entrants
-- ✅ Tests de sécurité automatisés
-- ✅ Détection des faux positifs, proposition de règles et déploiement après accord
+- ✅ HTML escaping of all untrusted data (XSS)
+- ✅ Client-side JavaScript limited to refresh and dashboard decisions
+- ✅ Validation of incoming payloads
+- ✅ Automated security tests
+- ✅ False positive detection, rule proposals and deployment after approval
 
 ---
 
@@ -200,39 +205,39 @@ Ran 11 tests in 0.024s — OK
 
 ```
 agent-ia-soc/
-├── webhook_receiver.py    # Serveur Flask + dashboard + endpoints
-├── ai_engine.py            # Analyse IA des alertes
-├── remediation_engine.py   # Exécution des actions
-├── telegram_bot.py         # Bot Telegram (polling + notifications)
-├── wazuh_rule_manager.py   # Gestion des règles de silence Wazuh
-├── sample_alerts.py        # Jeu d'alertes de test
-├── config.py               # Configuration centralisée
-├── test_fp.py              # Test des faux positifs
+├── webhook_receiver.py    # Flask server + dashboard + endpoints
+├── ai_engine.py            # AI analysis of alerts
+├── remediation_engine.py   # Execution of actions
+├── telegram_bot.py         # Telegram bot (polling + notifications)
+├── wazuh_rule_manager.py   # Wazuh silence rule management
+├── sample_alerts.py        # Test alert set
+├── config.py               # Centralised configuration
+├── test_fp.py              # False positive test
 ├── tests/
-│   └── test_security.py    # 11 tests de sécurité
-├── assets/architecture.svg # Schéma d’architecture vectoriel
-├── alerts_log.json         # Log des alertes traitées (généré à l'exécution)
-├── fp_tracker.json         # Tracker de faux positifs (généré à l'exécution)
-└── pending_approvals.json  # Approbations en attente (généré à l'exécution)
+│   └── test_security.py    # 11 security tests
+├── assets/architecture.svg # Vector architecture diagram
+├── alerts_log.json         # Log of processed alerts (generated at runtime)
+├── fp_tracker.json         # False positive tracker (generated at runtime)
+└── pending_approvals.json  # Pending approvals (generated at runtime)
 ```
 
 ---
 
 ## 🛣️ Roadmap
 
-- [ ] Intégration native Discord (en plus de Telegram)
-- [x] Détection automatique des faux positifs
-- [x] Dashboard léger avec rafraîchissement et décisions côté client
-- [ ] Playbooks de remédiation avancés (SOAR)
-- [ ] Support multi-tenants
-- [ ] Export PDF des rapports d'incidents
+- [ ] Native Discord integration (in addition to Telegram)
+- [x] Automatic false positive detection
+- [x] Lightweight dashboard with client-side refresh and decisions
+- [ ] Advanced remediation playbooks (SOAR)
+- [ ] Multi-tenant support
+- [ ] PDF export of incident reports
 
 ---
 
-## ⚖️ Licence
+## ⚖️ License
 
-MIT — fais-en ce que tu veux. Fork, améliore, déploie. Juste, crédite l'auteur.
+MIT, do what you want with it. Fork, improve, deploy. Just credit the author.
 
 ---
 
-*Built with ❤️‍🔥 by [Youssef Guerniou](https://github.com/Yukouf) — parce que les SOC méritent mieux que des copier-coller.*
+*Built with ❤️‍🔥 by [Youssef Guerniou](https://github.com/Yukouf), because SOCs deserve better than copy and paste.*
