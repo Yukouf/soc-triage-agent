@@ -1,4 +1,4 @@
-# 🤖 Agent IA SOC — Automatisation Wazuh × Telegram × IA
+# 🤖 Agent IA SOC : Automatisation Wazuh × Telegram × IA
 
 <p align="center">
   <a href="README.md">English</a> &bull;
@@ -55,7 +55,7 @@ Ces tâches répétitives ralentissent le traitement et détournent l’attentio
 
 ## 💡 La solution
 
-**Agent IA SOC** aide à fermer la boucle — de la détection à la décision — en réduisant le temps passé à trier le bruit. Le webhook normalise l’alerte, le moteur l’analyse, puis journalise ou exécute l’action selon la configuration. Telegram et le dashboard fournissent ensuite une validation humaine pour les propositions de règles et les décisions sensibles.
+**Agent IA SOC** aide à aller de la détection à la décision, en passant moins de temps le temps passé à trier le bruit. Le webhook normalise l’alerte, le moteur l’analyse, puis journalise ou exécute l’action selon la configuration. Telegram et le dashboard fournissent ensuite une validation humaine pour les propositions de règles et les décisions sensibles.
 
 ---
 
@@ -132,7 +132,7 @@ L'`ai_engine.py` analyse l'alerte et retourne :
 
 ### 3. Validation humaine sur Telegram
 
-> ⚠️ **ALERTE #100002 — BRUTEFORCE SSH**
+> ⚠️ **ALERTE #100002 : BRUTEFORCE SSH**
 > IP: `192.168.1.100` | Agent: `srv-web-01`
 > **Action suggérée :** `block_ip`
 >
@@ -149,10 +149,10 @@ Si approuvé **et** si la remédiation automatique est activée (`SOC_ENABLE_AUT
 | `silence_alert` | ✅ effectif | Enregistre le faux positif + règle de silence Wazuh |
 | `notify_slack` | ✅ effectif | Alerte Slack (si webhook fourni) |
 | `verify_and_escalate` | ✅ effectif | Escalade vers l'humain (log + Slack) |
-| `create_ticket` | ⚠️ partiel | Loggue « Ticket à créer » — l'appel API GLPI reste à brancher |
+| `create_ticket` | ⚠️ partiel | Loggue « Ticket à créer ». L'appel API GLPI reste à brancher |
 | `disable_user_ad` | 🔬 prototype | Défini dans `config.py`, **non exécuté** par le moteur |
 
-> **Important :** si la remédiation automatique est désactivée (réglage par défaut), ces actions sont **enregistrées dans le journal** mais **jamais exécutées** — la validation humaine reste obligatoire.
+> **Important :** si la remédiation automatique est désactivée (réglage par défaut), ces actions sont **enregistrées dans le journal** mais **jamais exécutées**. La validation humaine reste obligatoire.
 
 ---
 
@@ -186,7 +186,7 @@ test_fp_tracker_integrity ...................... ok
 test_pending_approvals_integrity ............... ok
 test_security_headers .......................... ok
 
-Ran 11 tests in 0.024s — OK
+Ran 11 tests in 0.024s ... OK
 ```
 
 ---
@@ -236,8 +236,8 @@ agent-ia-soc/
 
 ## ⚖️ Licence
 
-MIT — fais-en ce que tu veux. Fork, améliore, déploie. Juste, crédite l'auteur.
+MIT. Fais-en ce que tu veux. Fork, améliore, déploie. Juste, crédite l'auteur.
 
 ---
 
-*Built with ❤️‍🔥 by [Youssef Guerniou](https://github.com/Yukouf) — parce que les SOC méritent mieux que des copier-coller.*
+*Built with ❤️‍🔥 by [Youssef Guerniou](https://github.com/Yukouf), parce que les SOC méritent mieux que des copier-coller.*
