@@ -18,12 +18,12 @@ REMEDIATION_ACTIONS = {
     "notify_slack": "internal",        # traité par le code
 }
 
-# Wazuh (optionnel — remplir si connecté)
+# Wazuh (optionnel - remplir si connecté)
 WAZUH_HOST = "localhost"
 WAZUH_USER = ""
 WAZUH_PASS = ""
 
-# GLPI (optionnel — remplir si connecté)
+# GLPI (optionnel - remplir si connecté)
 GLPI_URL = ""
 GLPI_API_TOKEN = ""
 

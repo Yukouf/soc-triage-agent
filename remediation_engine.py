@@ -1,5 +1,5 @@
 """
-Moteur de remédiation — exécute les actions décidées par l'IA.
+Moteur de remédiation - exécute les actions décidées par l'IA.
 """
 
 import json

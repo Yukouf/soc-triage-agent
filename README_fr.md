@@ -86,7 +86,7 @@ python3 webhook_receiver.py
 
 ```
 ╔══════════════════════════════════════════╗
-║   🤖 Agent IA SOC — Automatique          ║
+║   🤖 Agent IA SOC - Automatique          ║
 ║                                          ║
 ║   Dashboard: http://0.0.0.0:5000         ║
 ║   Webhook:   POST /webhook/wazuh         ║

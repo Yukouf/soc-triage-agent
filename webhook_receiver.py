@@ -208,7 +208,7 @@ def _build_page():
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🤖 Agent IA SOC — Dashboard</title>
+<title>🤖 Agent IA SOC - Dashboard</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0d1117; color: #c9d1d9; padding: 16px; }}
@@ -520,7 +520,7 @@ def webhook_wazuh():
         "_raw": raw,  # garde l'original pour les logs
     }
     
-    logger.info(f"📨 Alerte reçue: {data['rule_id']} — {data['description'][:80]} (IP: {data['src_ip']})")
+    logger.info(f"📨 Alerte reçue: {data['rule_id']} - {data['description'][:80]} (IP: {data['src_ip']})")
 
     analysis = analyze_alert(data)
     logger.info(f"🧠 Analyse: {analysis.get('severity','?')} / confiance={analysis.get('confidence','?')}% / action={analysis.get('suggested_action','?')}")
@@ -567,7 +567,7 @@ if __name__ == "__main__":
 
     print("""
 ╔══════════════════════════════════════════╗
-║   🤖 Agent IA SOC — Automatique          ║
+║   🤖 Agent IA SOC - Automatique          ║
 ║                                          ║
 ║   Dashboard: http://VIP:5000             ║
 ║   Webhook:   POST /webhook/wazuh         ║

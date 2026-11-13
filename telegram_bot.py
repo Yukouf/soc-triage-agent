@@ -1,5 +1,5 @@
 """
-Module Telegram Bot — Notifications SOC avec boutons d'approbation.
+Module Telegram Bot - Notifications SOC avec boutons d'approbation.
 Polling (pas de webhook HTTPS nécessaire), inline keyboards ✅/❌/📊.
 """
 
@@ -230,7 +230,7 @@ def _build_approval_message(entry: dict) -> str:
     src_ip = html.escape(str(entry.get("src_ip", "")), quote=True)
     timestamp = html.escape(str(entry.get("timestamp", ""))[:19], quote=True)
     return (
-        f"🤖 <b>Approbation requise — Règle Wazuh</b>\n\n"
+        f"🤖 <b>Approbation requise - Règle Wazuh</b>\n\n"
         f"<b>Pattern FP détecté 3×</b>\n"
         f"📋 Règle source : <code>#{rule_id}</code>\n"
         f"🔍 Description : <code>{alert_desc}</code>\n"
@@ -250,7 +250,7 @@ def _build_decision_message(entry: dict, action: str, success: bool = False, sou
     if action == "approve" and success:
         return (
             f"✅ <b>RÈGLE CRÉÉE (FP)</b>{source_label}\n\n"
-            f"<code>#{rule_id}</code> — <code>level=\"0\"</code>\n"
+            f"<code>#{rule_id}</code> - <code>level=\"0\"</code>\n"
             f"Pattern : {alert_desc} ({src_ip})\n"
             f"<b>Déployée dans Wazuh manager</b> 🎉\n\n"
             f"Ce type d'alerte ne remontera plus."
@@ -264,11 +264,11 @@ def _build_decision_message(entry: dict, action: str, success: bool = False, sou
     if action == "reject":
         block_status = "🚫 IP bloquée temporairement (1h)" if success else "⚠️ IP non bloquée (aucune IP valide)"
         return (
-            f"❌ <b>REJETÉE — ATTAQUE RÉELLE</b>{source_label}\n\n"
+            f"❌ <b>REJETÉE - ATTAQUE RÉELLE</b>{source_label}\n\n"
             f"<code>#{rule_id}</code>\n"
             f"Pattern : {alert_desc} ({src_ip})\n"
             f"{block_status}\n"
-            f"⚠️ Pas de règle créée — les alertes continueront de remonter."
+            f"⚠️ Pas de règle créée - les alertes continueront de remonter."
         )
     if action == "unsure":
         return (
@@ -369,7 +369,7 @@ def _poll_loop(app):
                         if text == "/start":
                             send_message(
                                 chat_id,
-                                "👋 <b>Freya SOC Bot</b> — Assistant SOC<br>"
+                                "👋 <b>Freya SOC Bot</b> - Assistant SOC<br>"
                                 "Je t'informerai quand une règle Wazuh nécessite ton approbation.<br><br>"
                                 "✅ <b>Approuver (FP)</b> → Faux positif, crée une règle <code>level=\"0\"</code> dans Wazuh pour cacher ce pattern<br>"
                                 "❌ <b>Rejeter (Bloquer)</b> → Attaque réelle, bloque l'IP temporairement + pas de règle<br>"
@@ -441,7 +441,7 @@ def _handle_callback(data: str, chat_id: int, message_id: int):
     if entry["status"] != "pending":
         edit_message(
             chat_id, message_id,
-            f"⏳ Déjà traitée ({entry['status']}) — rien à faire."
+            f"⏳ Déjà traitée ({entry['status']}) - rien à faire."
         )
         return
 
@@ -481,4 +481,4 @@ def _handle_callback(data: str, chat_id: int, message_id: int):
         logger.info(f"⏸️ Incertain Telegram: #{entry['rule_id']}")
 
     # Nettoie le clavier du message édité (enlève les boutons)
-    # déjà fait — edit_messageText remplace tout le contenu
+    # déjà fait - edit_messageText remplace tout le contenu

@@ -12,7 +12,7 @@ import random
 WEBHOOK_URL = "http://localhost:5000/webhook/wazuh"
 
 SAMPLE_ALERTS = [
-    # False positive typique — scan réseau
+    # False positive typique - scan réseau
     {
         "rule_id": "100001",
         "level": 7,
@@ -39,11 +39,11 @@ SAMPLE_ALERTS = [
         "src_user": "",
         "agent_name": "srv-web-01",
     },
-    # Alerte volume élevé (FP prob — test de pénétration)
+    # Alerte volume élevé (FP prob - test de pénétration)
     {
         "rule_id": "100004",
         "level": 8,
-        "description": "Test de pénétration autorisé détecté — scan port 443 sur plage DMZ",
+        "description": "Test de pénétration autorisé détecté - scan port 443 sur plage DMZ",
         "src_ip": "10.0.1.99",
         "src_user": "pentest-user",
         "agent_name": "srv-dmz-01",
@@ -66,7 +66,7 @@ SAMPLE_ALERTS = [
         "src_user": "jdupont",
         "agent_name": "srv-files-01",
     },
-    # Alerte faible — DNS query suspect
+    # Alerte faible - DNS query suspect
     {
         "rule_id": "100007",
         "level": 4,
@@ -97,7 +97,7 @@ SAMPLE_ALERTS = [
     {
         "rule_id": "100010",
         "level": 5,
-        "description": "Échec d'authentification AD pour user 'admin' — mauvais mot de passe 3 fois en 5 minutes",
+        "description": "Échec d'authentification AD pour user 'admin' - mauvais mot de passe 3 fois en 5 minutes",
         "src_ip": "192.168.1.150",
         "src_user": "admin",
         "agent_name": "dc-01",

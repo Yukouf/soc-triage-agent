@@ -1,5 +1,5 @@
 """
-Gestionnaire de règles Wazuh — False Positive auto → local_rules.xml.
+Gestionnaire de règles Wazuh - False Positive auto → local_rules.xml.
 Quand l'IA détecte N fois le même pattern FP, crée automatiquement
 un override dans local_rules.xml du manager Wazuh.
 """
@@ -182,7 +182,7 @@ def _generate_rule(entry: dict) -> dict | None:
     match_xml = "\n".join(match_parts) if match_parts else ""
 
     rule_xml = f"""  <!-- Règle auto-générée par Agent IA SOC le {datetime.now().strftime('%Y-%m-%d %H:%M')} -->
-  <!-- Pattern: {desc_clean} ({src_ip}) — {len(entry['occurrences'])} occurrences -->
+  <!-- Pattern: {desc_clean} ({src_ip}) - {len(entry['occurrences'])} occurrences -->
   <rule id="{new_rule_id}" level="0">
     <if_sid>{rule_id}</if_sid>
 {match_xml}
@@ -220,8 +220,8 @@ def deploy_rule(rule: dict) -> bool:
         if result.returncode != 0:
             # Fichier n'existe pas encore → créer
             current_content = """<!--
-Wazuh Ruleset Local — Règles locales personnalisées.
-Auto-généré par Agent IA SOC — Ne pas éditer manuellement si vous ne savez pas ce que vous faites.
+Wazuh Ruleset Local - Règles locales personnalisées.
+Auto-généré par Agent IA SOC - Ne pas éditer manuellement si vous ne savez pas ce que vous faites.
 -->
 <group name="local_rules">\n\n</group>"""
         else:
