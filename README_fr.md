@@ -55,7 +55,7 @@ Ces tâches répétitives ralentissent le traitement et détournent l’attentio
 
 ## 💡 La solution
 
-**Agent IA SOC** aide à aller de la détection à la décision, en passant moins de temps le temps passé à trier le bruit. Le webhook normalise l’alerte, le moteur l’analyse, puis journalise ou exécute l’action selon la configuration. Telegram et le dashboard fournissent ensuite une validation humaine pour les propositions de règles et les décisions sensibles.
+**Agent IA SOC** aide à aller de la détection à la décision, en passant moins de temps à trier le bruit. Le webhook normalise l’alerte, le moteur l’analyse, puis journalise ou exécute l’action selon la configuration. Telegram et le dashboard fournissent ensuite une validation humaine pour les propositions de règles et les décisions sensibles.
 
 ---
 
