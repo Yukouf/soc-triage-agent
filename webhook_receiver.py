@@ -4,12 +4,15 @@ Reçoit les alertes Wazuh, les analyse via IA, exécute la remédiation.
 Dashboard web avec données injectées côté serveur (pas de JS nécessaire).
 """
 
+import base64
+import functools
+import hmac
 import json
 import html
 import logging
 import os
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, Response, request, jsonify
 
 from ai_engine import analyze_alert
 from remediation_engine import execute, _ensure_log, ALERTS_LOG
@@ -24,6 +27,60 @@ app = Flask(__name__)
 
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK_URL", "")
 WEBHOOK_HOST = os.environ.get("SOC_WEBHOOK_HOST", "127.0.0.1")
+WEBHOOK_PORT = int(os.environ.get("SOC_WEBHOOK_PORT", "5000"))
+
+# Secret partagé avec Wazuh (en-tête X-SOC-Token) pour /webhook/*.
+WEBHOOK_TOKEN = os.environ.get("SOC_WEBHOOK_TOKEN", "")
+# Identifiants du dashboard (authentification HTTP Basic).
+DASHBOARD_USER = os.environ.get("SOC_DASHBOARD_USER", "soc")
+DASHBOARD_PASSWORD = os.environ.get("SOC_DASHBOARD_PASSWORD", "")
+# En-tête exigé sur les POST du dashboard : un site tiers ne peut pas l'ajouter
+# sans pré-vérification CORS, ce qui bloque les requêtes forgées (CSRF).
+CSRF_HEADER = "X-SOC-Dashboard"
+
+
+def _same(a: str, b: str) -> bool:
+    return hmac.compare_digest(a.encode(), b.encode())
+
+
+def _dashboard_auth_ok() -> bool:
+    header = request.headers.get("Authorization", "")
+    if not header.startswith("Basic "):
+        return False
+    try:
+        user, _, password = base64.b64decode(header[6:]).decode().partition(":")
+    except (ValueError, UnicodeDecodeError):
+        return False
+    return _same(user, DASHBOARD_USER) and _same(password, DASHBOARD_PASSWORD)
+
+
+def require_dashboard(write: bool = False):
+    """
+    Lecture : protégée par mot de passe si SOC_DASHBOARD_PASSWORD est défini.
+    Écriture (décisions) : refusée tant qu'aucun mot de passe n'est défini.
+    """
+    def decorator(view):
+        @functools.wraps(view)
+        def wrapper(*args, **kwargs):
+            if not DASHBOARD_PASSWORD:
+                if write:
+                    return jsonify({"status": "error", "message": "Décisions désactivées : définir SOC_DASHBOARD_PASSWORD"}), 403
+            elif not _dashboard_auth_ok():
+                return Response("Authentification requise", 401, {"WWW-Authenticate": 'Basic realm="SOC"'})
+            if write and request.headers.get(CSRF_HEADER) != "1":
+                return jsonify({"status": "error", "message": "En-tête CSRF manquant"}), 403
+            return view(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def require_webhook_token(view):
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        if WEBHOOK_TOKEN and not _same(request.headers.get("X-SOC-Token", ""), WEBHOOK_TOKEN):
+            return jsonify({"error": "unauthorized"}), 401
+        return view(*args, **kwargs)
+    return wrapper
 
 _ensure_log()
 
@@ -114,10 +171,10 @@ var AUTO_REFRESH_INTERVAL = setInterval(function() {
     }
   };
   x.send();
-});
+}, 15000);
 
 function approveRule(id) {
-  fetch('/api/approve/' + id, {method:'POST'})
+  fetch('/api/approve/' + id, {method:'POST', headers:{'X-SOC-Dashboard':'1'}})
     .then(function(r){ return r.json(); })
     .then(function(d){
       var card = document.getElementById('pending-' + id);
@@ -126,7 +183,7 @@ function approveRule(id) {
     });
 }
 function rejectRule(id) {
-  fetch('/api/reject/' + id, {method:'POST'})
+  fetch('/api/reject/' + id, {method:'POST', headers:{'X-SOC-Dashboard':'1'}})
     .then(function(r){ return r.json(); })
     .then(function(d) {
       var card = document.getElementById('pending-' + id);
@@ -135,7 +192,7 @@ function rejectRule(id) {
     });
 }
 function unsureRule(id) {
-  fetch('/api/unsure/' + id, {method:'POST'})
+  fetch('/api/unsure/' + id, {method:'POST', headers:{'X-SOC-Dashboard':'1'}})
     .then(function(r){ return r.json(); })
     .then(function() {
       var card = document.getElementById('pending-' + id);
@@ -208,7 +265,7 @@ def _build_page():
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🤖 Agent IA SOC - Dashboard</title>
+<title>SOC Triage Agent</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0d1117; color: #c9d1d9; padding: 16px; }}
@@ -268,7 +325,7 @@ def _build_page():
 </style>
 </head>
 <body>
-<h1>🤖 Agent IA SOC</h1>
+<h1>🤖 SOC Triage Agent</h1>
 <p class="subtitle">Surveillance • Analyse • Remédiation automatique</p>
 
 <div class="stats">
@@ -313,11 +370,13 @@ def _build_page():
 # ─── Routes ───
 
 @app.route("/")
+@require_dashboard()
 def dashboard():
     return _build_page()
 
 
 @app.route("/api/alerts")
+@require_dashboard()
 def api_alerts():
     alerts = _load_alerts()
     stats = _compute_stats(alerts)
@@ -330,17 +389,20 @@ def api_alerts():
 
 
 @app.route("/api/fp-rules")
+@require_dashboard()
 def api_fp_rules():
     return jsonify(get_tracker_status())
 
 
 @app.route("/api/pending-approvals")
+@require_dashboard()
 def api_pending_approvals():
     """Retourne les approbations en attente et l'historique."""
     return jsonify(get_pending_stats())
 
 
 @app.route("/api/approve/<pending_id>", methods=["POST"])
+@require_dashboard(write=True)
 def api_approve(pending_id):
     """Approuve la création de règle depuis le dashboard."""
     from telegram_bot import approve_pending
@@ -378,19 +440,19 @@ def api_approve(pending_id):
 
 
 @app.route("/api/bot-status")
+@require_dashboard()
 def api_bot_status():
-    """Debug: etat du bot Telegram."""
-    from telegram_bot import _bot_chat_ids, _CHAT_IDS_FILE
-    import os
+    """État du bot Telegram (sans exposer les identifiants)."""
+    import telegram_bot
     return jsonify({
-        "chat_ids": list(_bot_chat_ids),
-        "chat_ids_file": _CHAT_IDS_FILE,
-        "file_exists": os.path.exists(_CHAT_IDS_FILE),
-        "poller_running": True,
+        "allowed_chats": len(telegram_bot.ALLOWED_CHAT_IDS),
+        "token_configured": bool(telegram_bot.BOT_TOKEN),
+        "poller_running": telegram_bot._poller_running,
     })
 
 
 @app.route("/api/reject/<pending_id>", methods=["POST"])
+@require_dashboard(write=True)
 def api_reject(pending_id):
     """Rejette la création de règle depuis le dashboard + bloque IP."""
     from telegram_bot import reject_pending, _load_pending
@@ -425,6 +487,7 @@ def api_reject(pending_id):
 
 
 @app.route("/api/unsure/<pending_id>", methods=["POST"])
+@require_dashboard(write=True)
 def api_unsure(pending_id):
     """Marque comme incertain depuis le dashboard."""
     from telegram_bot import _mark_unsure, _load_pending
@@ -498,6 +561,7 @@ def _send_alert_notification(alert: dict, analysis: dict, report: dict):
 
 
 @app.route("/webhook/wazuh", methods=["POST"])
+@require_webhook_token
 def webhook_wazuh():
     """Endpoint qui reçoit les alertes Wazuh."""
     raw = request.get_json(silent=True) or {}
@@ -539,6 +603,7 @@ def webhook_wazuh():
 
 
 @app.route("/webhook/test", methods=["POST", "GET"])
+@require_webhook_token
 def webhook_test():
     """Endpoint de test."""
     if request.method == "GET":
@@ -565,13 +630,16 @@ if __name__ == "__main__":
     # Démarre le poller Telegram (thread bg)
     start_poller(app)
 
-    print("""
+    if not WEBHOOK_TOKEN:
+        logger.warning("SOC_WEBHOOK_TOKEN non défini : le webhook accepte toute requête qui atteint le port")
+    if not DASHBOARD_PASSWORD:
+        logger.warning("SOC_DASHBOARD_PASSWORD non défini : les décisions depuis le dashboard sont désactivées")
+
+    print(f"""
 ╔══════════════════════════════════════════╗
-║   🤖 Agent IA SOC - Automatique          ║
-║                                          ║
-║   Dashboard: http://VIP:5000             ║
+║   SOC Triage Agent                       ║
+║   Dashboard: http://{WEBHOOK_HOST}:{WEBHOOK_PORT}
 ║   Webhook:   POST /webhook/wazuh         ║
-║   Test:      GET  /webhook/test          ║
 ╚══════════════════════════════════════════╝
     """)
-    app.run(host=WEBHOOK_HOST, port=5000, debug=False)
+    app.run(host=WEBHOOK_HOST, port=WEBHOOK_PORT, debug=False)

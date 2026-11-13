@@ -7,7 +7,7 @@ import ipaddress
 import logging
 import os
 import subprocess
-import time
+import threading
 from datetime import datetime
 
 from wazuh_rule_manager import track_false_positive, deploy_rule, get_tracker_status
@@ -26,7 +26,15 @@ def _ensure_log():
             json.dump([], f)
 
 
+_LOG_LOCK = threading.Lock()
+
+
 def _append_log(entry: dict):
+    with _LOG_LOCK:
+        _append_log_unlocked(entry)
+
+
+def _append_log_unlocked(entry: dict):
     _ensure_log()
     try:
         with open(ALERTS_LOG, "r") as f:
@@ -68,9 +76,12 @@ def block_ip(ip: str, temporary: bool = False) -> bool:
         logger.error(f"IP non bloquable refusée: {address}")
         return False
     canonical_ip = str(address)
-    cmd = ["iptables", "-A", "INPUT", "-s", canonical_ip, "-j", "DROP"]
+    rule = ["INPUT", "-s", canonical_ip, "-j", "DROP"]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, timeout=10)
+        # Évite d'empiler la même règle si l'IP est déjà bloquée.
+        exists = subprocess.run(["iptables", "-C", *rule], capture_output=True, timeout=10)
+        if exists.returncode != 0:
+            subprocess.run(["iptables", "-A", *rule], check=True, capture_output=True, timeout=10)
         if temporary:
             # Schedule unblock in 1 hour
             # canonical_ip provient de ipaddress, jamais de l'entrée brute.
@@ -111,7 +122,8 @@ def execute(alert: dict, analysis: dict, slack_webhook: str = "") -> dict:
     Retourne un rapport.
     """
     action = analysis.get("suggested_action", "create_ticket")
-    requested_auto = bool(analysis.get("auto_remediate", False))
+    # Seul le booléen True autorise l'action : "false", "yes", 1... sont refusés.
+    requested_auto = analysis.get("auto_remediate") is True
     auto = requested_auto and ENABLE_AUTO_REMEDIATION
     ip = alert.get("src_ip", "")
     user = alert.get("src_user", "")

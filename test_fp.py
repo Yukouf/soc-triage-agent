@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Envoie N alertes Wazuh identiques pour tester le FP auto-tracking."""
 import json
+import os
 import urllib.request
 import sys
 
-URL = "http://147.79.101.212:5000/webhook/wazuh"
+URL = os.environ.get("SOC_URL", "http://127.0.0.1:5000") + "/webhook/wazuh"
+TOKEN = os.environ.get("SOC_WEBHOOK_TOKEN", "")
 COUNT = int(sys.argv[1]) if len(sys.argv) > 1 else 3
 
 alert = {
@@ -17,7 +19,7 @@ for i in range(1, COUNT + 1):
     req = urllib.request.Request(
         URL,
         data=json.dumps(alert).encode(),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "X-SOC-Token": TOKEN},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=10) as resp:

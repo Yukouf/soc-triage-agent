@@ -17,34 +17,60 @@ import requests
 logger = logging.getLogger("telegram-bot")
 
 BOT_TOKEN = os.environ.get("SOC_TELEGRAM_BOT_TOKEN", "").strip()
+DASHBOARD_URL = os.environ.get("SOC_DASHBOARD_URL", "").strip()
 
 PENDING_FILE = os.path.join(os.path.dirname(__file__), "pending_approvals.json")
+_PENDING_LOCK = threading.RLock()
 
-# Stockage interne
+
+def _parse_chat_ids(raw: str) -> set:
+    """Lit une liste d'identifiants Telegram : "123,456" ou '["123","456"]'."""
+    raw = (raw or "").strip()
+    if not raw:
+        return set()
+    try:
+        values = json.loads(raw) if raw.startswith("[") else raw.split(",")
+    except json.JSONDecodeError:
+        return set()
+    ids = set()
+    for value in values:
+        try:
+            ids.add(int(str(value).strip()))
+        except ValueError:
+            continue
+    return ids
+
+
+# Seuls ces comptes reçoivent les alertes et peuvent décider. Liste vide = personne.
+ALLOWED_CHAT_IDS = _parse_chat_ids(os.environ.get("SOC_TELEGRAM_ALLOWED_CHAT_IDS", ""))
+
 _last_update_id = 0
-_bot_chat_ids = set()  # chats connus (decouverts via /start)
 _poller_running = False
-_CHAT_IDS_FILE = os.path.join(os.path.dirname(__file__), ".bot_chat_ids.json")
 
 
-def _save_chat_ids():
-    """Sauvegarde les chat_ids dans un fichier."""
-    try:
-        with open(_CHAT_IDS_FILE, "w") as f:
-            json.dump({"chat_ids": list(_bot_chat_ids)}, f)
-    except Exception:
-        pass
+def _locked(func):
+    """Sérialise les lectures-modifications-écritures du fichier des décisions."""
+    def wrapper(*args, **kwargs):
+        with _PENDING_LOCK:
+            return func(*args, **kwargs)
+    wrapper.__name__ = func.__name__
+    wrapper.__doc__ = func.__doc__
+    return wrapper
 
 
-def _load_chat_ids():
-    """Charge les chat_ids depuis le fichier."""
-    global _bot_chat_ids
-    try:
-        with open(_CHAT_IDS_FILE) as f:
-            data = json.load(f)
-            _bot_chat_ids = set(data.get("chat_ids", []))
-    except (FileNotFoundError, json.JSONDecodeError):
-        _bot_chat_ids = set()
+def is_authorized(chat_id, user_id=None) -> bool:
+    """
+    Un message ou un clic n'est accepté que si la conversation est autorisée
+    et, quand on connaît l'auteur, si cet auteur est lui aussi autorisé
+    (dans un groupe : lister l'ID du groupe ET celui de chaque analyste).
+    """
+    if chat_id not in ALLOWED_CHAT_IDS:
+        return False
+    return user_id is None or user_id in ALLOWED_CHAT_IDS
+
+
+def _dashboard_button() -> list:
+    return [{"text": "📊 Dashboard SOC", "url": DASHBOARD_URL}] if DASHBOARD_URL else []
 
 
 # ─── CRUD pending approvals ───
@@ -69,6 +95,7 @@ def _save_pending(data: dict):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+@_locked
 def add_pending(pattern_key: str, rule: dict, alert: dict, analysis: dict) -> dict:
     """Ajoute une approbation en attente et retourne l'entrée créée."""
     data = _load_pending()
@@ -94,6 +121,7 @@ def get_pending() -> list:
     return [p for p in data["pending"] if p["status"] == "pending"]
 
 
+@_locked
 def approve_pending(pending_id: str) -> bool:
     """Approuve une entrée pending. Retourne le rule dict si OK."""
     data = _load_pending()
@@ -107,6 +135,7 @@ def approve_pending(pending_id: str) -> bool:
     return False
 
 
+@_locked
 def reject_pending(pending_id: str) -> bool:
     """Rejette une entrée pending."""
     data = _load_pending()
@@ -120,6 +149,7 @@ def reject_pending(pending_id: str) -> bool:
     return False
 
 
+@_locked
 def _mark_unsure(pending_id: str) -> bool:
     """Marque une entrée comme incertaine (pas de règle, pas de blocage)."""
     data = _load_pending()
@@ -230,13 +260,14 @@ def _build_approval_message(entry: dict) -> str:
     src_ip = html.escape(str(entry.get("src_ip", "")), quote=True)
     timestamp = html.escape(str(entry.get("timestamp", ""))[:19], quote=True)
     return (
-        f"🤖 <b>Approbation requise - Règle Wazuh</b>\n\n"
-        f"<b>Pattern FP détecté 3×</b>\n"
+        f"🤖 <b>Décision requise</b>\n\n"
         f"📋 Règle source : <code>#{rule_id}</code>\n"
         f"🔍 Description : <code>{alert_desc}</code>\n"
         f"🌐 IP source : <code>{src_ip}</code>\n"
-        f"🕐 Première occ. : {timestamp}\n\n"
-        f"Créer une règle <code>level=\"0\"</code> pour supprimer ce pattern ?"
+        f"🕐 Reçue : {timestamp}\n\n"
+        f"✅ Faux positif : créer une règle <code>level=\"0\"</code> qui fait taire ce pattern\n"
+        f"❌ Attaque : bloquer l'IP 1 h\n"
+        f"⏸️ Incertain : ne rien faire"
     )
 
 
@@ -291,15 +322,17 @@ def send_approval_request(entry: dict, chat_id: int = None):
                 {"text": "✅ Approuver (FP)", "callback_data": f"approve:{entry['id']}"},
                 {"text": "❌ Rejeter (Bloquer)", "callback_data": f"reject:{entry['id']}"},
             ],
-            [
-                {"text": "⏸️ Incertain", "callback_data": f"unsure:{entry['id']}"},
-                {"text": "📊 Dashboard SOC", "url": "http://147.79.101.212:5000"},
-            ],
+            [{"text": "⏸️ Incertain", "callback_data": f"unsure:{entry['id']}"}, *_dashboard_button()],
         ]
     }
 
     text = _build_approval_message(entry)
-    targets = [chat_id] if chat_id else list(_bot_chat_ids)
+    if chat_id is not None and chat_id not in ALLOWED_CHAT_IDS:
+        logger.warning("Envoi refusé : conversation non autorisée")
+        return
+    targets = [chat_id] if chat_id is not None else sorted(ALLOWED_CHAT_IDS)
+    if not targets:
+        logger.warning("SOC_TELEGRAM_ALLOWED_CHAT_IDS vide : aucune notification envoyée")
 
     for cid in targets:
         msg = send_message(cid, text, reply_markup=keyboard)
@@ -307,23 +340,22 @@ def send_approval_request(entry: dict, chat_id: int = None):
             entry["telegram_msg_id"] = msg.get("message_id")
             entry["chat_id"] = cid
             # Persiste le msg_id dans le fichier
-            data = _load_pending()
-            for e in data["pending"]:
-                if e["id"] == entry["id"]:
-                    e["telegram_msg_id"] = msg["message_id"]
-                    e["chat_id"] = cid
-                    break
-            _save_pending(data)
+            with _PENDING_LOCK:
+                data = _load_pending()
+                for e in data["pending"]:
+                    if e["id"] == entry["id"]:
+                        e["telegram_msg_id"] = msg["message_id"]
+                        e["chat_id"] = cid
+                        break
+                _save_pending(data)
 
 
 def send_simple_notification(chat_id: int, text: str):
     """Envoie une notification simple (pour alertes critiques)."""
-    keyboard = {
-        "inline_keyboard": [
-            [{"text": "📊 Dashboard SOC", "url": "http://147.79.101.212:5000"}],
-        ]
-    }
-    send_message(chat_id, text, reply_markup=keyboard)
+    if chat_id not in ALLOWED_CHAT_IDS:
+        return
+    button = _dashboard_button()
+    send_message(chat_id, text, reply_markup={"inline_keyboard": [button]} if button else None)
 
 
 # ─── Polling loop ───
@@ -334,8 +366,8 @@ def start_poller(app):
     if _poller_running:
         return
 
-    # Charge les chat_ids persistes
-    _load_chat_ids()
+    if not ALLOWED_CHAT_IDS:
+        logger.warning("SOC_TELEGRAM_ALLOWED_CHAT_IDS vide : le bot n'acceptera aucune décision")
 
     _poller_running = True
     thread = threading.Thread(
@@ -362,19 +394,20 @@ def _poll_loop(app):
                 msg = update.get("message")
                 if msg:
                     chat_id = msg.get("chat", {}).get("id")
+                    user_id = msg.get("from", {}).get("id")
                     text = msg.get("text", "")
+                    if not is_authorized(chat_id, user_id):
+                        logger.warning("Message ignoré : compte Telegram non autorisé")
+                        continue
                     if chat_id:
-                        _bot_chat_ids.add(chat_id)
-                        _save_chat_ids()
                         if text == "/start":
                             send_message(
                                 chat_id,
-                                "👋 <b>Freya SOC Bot</b> - Assistant SOC<br>"
-                                "Je t'informerai quand une règle Wazuh nécessite ton approbation.<br><br>"
-                                "✅ <b>Approuver (FP)</b> → Faux positif, crée une règle <code>level=\"0\"</code> dans Wazuh pour cacher ce pattern<br>"
-                                "❌ <b>Rejeter (Bloquer)</b> → Attaque réelle, bloque l'IP temporairement + pas de règle<br>"
-                                "⏸️ <b>Incertain</b> → Aucune action, à trancher plus tard sur le dashboard<br><br>"
-                                f"📊 Dashboard : <a href='http://147.79.101.212:5000'>SOC Dashboard</a>",
+                                "👋 <b>SOC Triage Agent</b>\n"
+                                "Je t'envoie chaque alerte Wazuh qui demande une décision.\n\n"
+                                "✅ <b>Approuver (FP)</b> → faux positif, crée une règle <code>level=\"0\"</code> dans Wazuh pour cacher ce pattern\n"
+                                "❌ <b>Rejeter (Bloquer)</b> → attaque réelle, bloque l'IP 1 h, pas de règle\n"
+                                "⏸️ <b>Incertain</b> → aucune action, à trancher plus tard sur le dashboard",
                             )
                         elif text == "/status":
                             stats = get_pending_stats()
@@ -395,14 +428,16 @@ def _poll_loop(app):
                     data = cb.get("data", "")
                     msg_obj = cb.get("message", {})
                     chat_id = msg_obj.get("chat", {}).get("id")
+                    user_id = cb.get("from", {}).get("id")
                     message_id = msg_obj.get("message_id")
+
+                    if not is_authorized(chat_id, user_id):
+                        answer_callback(cb_id, "Non autorisé")
+                        logger.warning("Clic refusé : compte Telegram non autorisé")
+                        continue
 
                     # Répond au callback (enlève loading)
                     answer_callback(cb_id)
-
-                    if chat_id:
-                        _bot_chat_ids.add(chat_id)
-                        _save_chat_ids()
 
                     # Traite la donnée
                     with app.app_context():
@@ -413,6 +448,7 @@ def _poll_loop(app):
             time.sleep(5)
 
 
+@_locked
 def _handle_callback(data: str, chat_id: int, message_id: int):
     """Traite un clic sur bouton inline.
     

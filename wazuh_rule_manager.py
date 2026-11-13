@@ -9,7 +9,7 @@ import logging
 import os
 import re
 import subprocess
-import time
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -79,7 +79,16 @@ def _is_within_window(ts: str) -> bool:
         return True
 
 
+_TRACKER_LOCK = threading.Lock()
+
+
 def track_false_positive(alert: dict, analysis: dict) -> dict | None:
+    """Version protégée par verrou (serveur web et bot tournent en parallèle)."""
+    with _TRACKER_LOCK:
+        return _track_false_positive(alert, analysis)
+
+
+def _track_false_positive(alert: dict, analysis: dict) -> dict | None:
     """
     Track un FP et retourne la règle à créer si le seuil est atteint.
     Retourne None si pas encore assez d'occurrences.
